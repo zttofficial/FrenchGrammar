@@ -9,11 +9,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +42,7 @@ fun VerbCard(
     verb: Verb,
     isFlipped: Boolean = false,
     onFlip: () -> Unit = {},
+    onSpeak: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -75,7 +81,19 @@ fun VerbCard(
                         color = Color.White.copy(alpha = 0.85f),
                         fontStyle = FontStyle.Italic
                     )
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(12.dp))
+                    if (onSpeak != null) {
+                        IconButton(onClick = { onSpeak(verb.infinitive) }) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "朗讀",
+                                tint = Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                    }
                     Text(
                         text = "點擊查看變位",
                         fontSize = 13.sp,
@@ -106,14 +124,14 @@ fun VerbCard(
                 )
                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                 Spacer(Modifier.height(8.dp))
-                ConjugationGrid(verb = verb)
+                ConjugationGrid(verb = verb, onSpeak = onSpeak)
             }
         }
     }
 }
 
 @Composable
-fun ConjugationGrid(verb: Verb, modifier: Modifier = Modifier) {
+fun ConjugationGrid(verb: Verb, onSpeak: ((String) -> Unit)? = null, modifier: Modifier = Modifier) {
     val conjugations = listOf(
         "Je" to verb.je,
         "Tu" to verb.tu,
@@ -130,7 +148,7 @@ fun ConjugationGrid(verb: Verb, modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (index % 2 == 0) Color(0xFFF5F7FF) else Color.Transparent)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -144,9 +162,22 @@ fun ConjugationGrid(verb: Verb, modifier: Modifier = Modifier) {
                     text = form.ifEmpty { "—" },
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(0.65f),
+                    modifier = Modifier.weight(0.55f),
                     color = Color(0xFF1A1A2E)
                 )
+                if (onSpeak != null && form.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onSpeak(form) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "朗讀",
+                            tint = ColorFrenchBlue.copy(alpha = 0.45f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -156,7 +187,7 @@ fun ConjugationGrid(verb: Verb, modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -170,9 +201,22 @@ fun ConjugationGrid(verb: Verb, modifier: Modifier = Modifier) {
                     text = verb.pastParticiple,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(0.65f),
+                    modifier = Modifier.weight(0.55f),
                     color = md_theme_light_primary
                 )
+                if (onSpeak != null) {
+                    IconButton(
+                        onClick = { onSpeak(verb.pastParticiple) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "朗讀",
+                            tint = md_theme_light_tertiary.copy(alpha = 0.55f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }

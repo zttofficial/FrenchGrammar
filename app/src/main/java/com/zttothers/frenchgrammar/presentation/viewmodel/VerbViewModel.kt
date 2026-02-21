@@ -103,7 +103,6 @@ data class LearningState(
     val currentVerbIndex: Int = 0,
     val verbs: List<Verb> = emptyList(),
     val isFlipped: Boolean = false,
-    val correctCount: Int = 0,
     val totalCount: Int = 0
 )
 
@@ -114,6 +113,7 @@ class LearningViewModel(
 
     private val _learningState = MutableStateFlow(LearningState())
     val learningState: StateFlow<LearningState> = _learningState.asStateFlow()
+    private var _pendingJumpVerbId: Int = -1
 
     init {
         loadVerbsForLearning()
@@ -122,9 +122,19 @@ class LearningViewModel(
     private fun loadVerbsForLearning() {
         viewModelScope.launch {
             verbRepository.getAllVerbs().collect { verbs ->
-                _learningState.value = _learningState.value.copy(
-                    verbs = verbs.shuffled(),
-                    totalCount = verbs.size
+                val sorted = verbs.sortedBy { it.id }
+                val current = _learningState.value
+                val pending = _pendingJumpVerbId
+                val startIndex = when {
+                    pending >= 0 -> sorted.indexOfFirst { it.id == pending }.takeIf { it >= 0 } ?: 0
+                    current.verbs.isNotEmpty() -> current.currentVerbIndex
+                    else -> 0
+                }
+                _pendingJumpVerbId = -1
+                _learningState.value = current.copy(
+                    verbs = sorted,
+                    totalCount = sorted.size,
+                    currentVerbIndex = startIndex
                 )
             }
         }
@@ -137,69 +147,32 @@ class LearningViewModel(
     }
 
     fun nextCard() {
-        val currentIndex = _learningState.value.currentVerbIndex
-        val totalCount = _learningState.value.totalCount
+        val s = _learningState.value
+        if (s.verbs.isEmpty()) return
+        val next = (s.currentVerbIndex + 1) % s.verbs.size
+        _learningState.value = s.copy(currentVerbIndex = next, isFlipped = false)
+    }
 
-        if (currentIndex < totalCount - 1) {
-            _learningState.value = _learningState.value.copy(
-                currentVerbIndex = currentIndex + 1,
-                isFlipped = false
-            )
+    fun jumpToVerbId(verbId: Int) {
+        val verbs = _learningState.value.verbs
+        if (verbs.isNotEmpty()) {
+            val index = verbs.indexOfFirst { it.id == verbId }
+            if (index >= 0) {
+                _learningState.value = _learningState.value.copy(
+                    currentVerbIndex = index,
+                    isFlipped = false
+                )
+            }
+        } else {
+            _pendingJumpVerbId = verbId
         }
     }
 
     fun previousCard() {
-        val currentIndex = _learningState.value.currentVerbIndex
-
-        if (currentIndex > 0) {
-            _learningState.value = _learningState.value.copy(
-                currentVerbIndex = currentIndex - 1,
-                isFlipped = false
-            )
-        }
-    }
-
-    fun markAsCorrect() {
-        val currentVerb = _learningState.value.verbs.getOrNull(_learningState.value.currentVerbIndex)
-        if (currentVerb != null) {
-            viewModelScope.launch {
-                val progress = progressRepository.getProgress(currentVerb.id)
-                    ?: LearningProgress(verbId = currentVerb.id)
-
-                val updatedProgress = progress.copy(
-                    status = if (progress.correctCount + 1 >= 5) "MASTERED" else "LEARNING",
-                    reviewCount = progress.reviewCount + 1,
-                    correctCount = progress.correctCount + 1,
-                    lastReviewTime = System.currentTimeMillis(),
-                    mastery = ((progress.correctCount + 1).toFloat() / (progress.reviewCount + 1)).coerceIn(0f, 1f)
-                )
-                progressRepository.updateProgress(updatedProgress)
-
-                _learningState.value = _learningState.value.copy(
-                    correctCount = _learningState.value.correctCount + 1
-                )
-            }
-        }
-        nextCard()
-    }
-
-    fun markAsIncorrect() {
-        val currentVerb = _learningState.value.verbs.getOrNull(_learningState.value.currentVerbIndex)
-        if (currentVerb != null) {
-            viewModelScope.launch {
-                val progress = progressRepository.getProgress(currentVerb.id)
-                    ?: LearningProgress(verbId = currentVerb.id)
-
-                val updatedProgress = progress.copy(
-                    status = "LEARNING",
-                    reviewCount = progress.reviewCount + 1,
-                    lastReviewTime = System.currentTimeMillis(),
-                    mastery = (progress.correctCount.toFloat() / (progress.reviewCount + 1)).coerceIn(0f, 1f)
-                )
-                progressRepository.updateProgress(updatedProgress)
-            }
-        }
-        nextCard()
+        val s = _learningState.value
+        if (s.verbs.isEmpty()) return
+        val prev = (s.currentVerbIndex - 1 + s.verbs.size) % s.verbs.size
+        _learningState.value = s.copy(currentVerbIndex = prev, isFlipped = false)
     }
 }
 
@@ -242,7 +215,8 @@ class SpellingQuizViewModel(
                     "Il / Elle" to { v -> v.ilElle },
                     "Nous" to { v -> v.nous },
                     "Vous" to { v -> v.vous },
-                    "Ils / Elles" to { v -> v.ilsElles }
+                    "Ils / Elles" to { v -> v.ilsElles },
+                    "P.P." to { v -> v.pastParticiple }
                 )
                 val questions = verbs.flatMap { verb ->
                     pronounEntries

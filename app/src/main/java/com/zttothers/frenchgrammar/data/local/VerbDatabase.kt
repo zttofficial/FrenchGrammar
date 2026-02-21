@@ -40,7 +40,12 @@ class InMemoryVerbDataSource : VerbDataSource {
 
     override fun searchVerbs(query: String): Flow<List<Verb>> {
         return verbsFlow.map { verbs ->
-            verbs.filter { it.infinitive.contains(query, ignoreCase = true) }
+            verbs.filter { v ->
+                listOf(
+                    v.infinitive, v.meaning, v.je, v.tu, v.ilElle,
+                    v.nous, v.vous, v.ilsElles, v.pastParticiple, v.relatedVerbs
+                ).any { it.contains(query, ignoreCase = true) }
+            }
         }
     }
 

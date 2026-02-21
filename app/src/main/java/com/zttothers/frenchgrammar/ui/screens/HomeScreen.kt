@@ -1,4 +1,4 @@
-package com.zttothers.frenchgrammar.ui.screens
+﻿package com.zttothers.frenchgrammar.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,14 +14,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.zttothers.frenchgrammar.data.models.Verb
 import com.zttothers.frenchgrammar.presentation.viewmodel.VerbViewModel
 import com.zttothers.frenchgrammar.ui.components.StatCard
 import com.zttothers.frenchgrammar.ui.navigation.Screen
@@ -68,7 +73,7 @@ fun HomeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🇫🇷", fontSize = 22.sp, modifier = Modifier.padding(end = 8.dp))
                         Text(
-                            "法語動詞練習",
+                            "法語文法練習",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 20.sp
                         )
@@ -109,11 +114,53 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    label = { Text("搜尋動詞…") },
+                    label = { Text("搜尋不規則動詞…") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.search("") }) {
+                                Icon(Icons.Default.Close, contentDescription = null,
+                                    modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp)
                 )
+            }
+
+            // ── Search results ─────────────────────────────────────────
+            if (uiState.searchQuery.isNotEmpty()) {
+                if (uiState.verbs.isEmpty()) {
+                    item {
+                        Text(
+                            "無搜尋結果",
+                            color = androidx.compose.ui.graphics.Color.Gray,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    item {
+                        Text(
+                            "搜尋結果：${uiState.verbs.size} 筆",
+                            fontSize = 13.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(uiState.verbs) { verb ->
+                        SearchResultCard(
+                            verb = verb,
+                            query = uiState.searchQuery,
+                            onClick = { navController.navigate(Screen.CardLearning.withVerb(verb.id)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
+                return@LazyColumn
             }
 
             // ── Progress stats ────────────────────────────────────────────
@@ -187,7 +234,7 @@ fun HomeScreen(
                 ModeCard(
                     emoji = "✏️",
                     title = "拼寫練習",
-                    subtitle = "輸入某個人稱的動詞變位形式",
+                    subtitle = "輸入某個人稱的不規則動詞變位形式",
                     gradientColors = listOf(ColorFrenchBlue.copy(alpha = 0.85f), ColorFrenchBlue.copy(alpha = 0.6f)),
                     onClick = { navController.navigate(Screen.Quiz.route) },
                     modifier = Modifier
@@ -200,9 +247,22 @@ fun HomeScreen(
                 ModeCard(
                     emoji = "📇",
                     title = "單字卡學習",
-                    subtitle = "翻轉卡片查看動詞所有人稱變位",
+                    subtitle = "翻轉卡片查看不規則動詞所有人稱變位",
                     gradientColors = listOf(md_theme_light_primary.copy(alpha = 0.85f), md_theme_light_primary.copy(alpha = 0.6f)),
-                    onClick = { navController.navigate(Screen.CardLearning.route) },
+                    onClick = { navController.navigate(Screen.CardLearning.plainRoute) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+
+            item {
+                ModeCard(
+                    emoji = "🔢",
+                    title = "數字練習",
+                    subtitle = "1-100，數字與法語雙向練習",
+                    gradientColors = listOf(ColorFrenchRed.copy(alpha = 0.80f), ColorFrenchRed.copy(alpha = 0.55f)),
+                    onClick = { navController.navigate(Screen.Numbers.route) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -264,6 +324,68 @@ fun ModeCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SearchResultCard(
+    verb: Verb,
+    query: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val matchedForms = buildList {
+        val q = query.lowercase()
+        mapOf(
+            "je " to verb.je, "tu " to verb.tu, "il/elle " to verb.ilElle,
+            "nous " to verb.nous, "vous " to verb.vous, "ils/elles " to verb.ilsElles,
+            "p.p. " to verb.pastParticiple
+        ).forEach { (label, form) ->
+            if (form.contains(q, ignoreCase = true) &&
+                !verb.infinitive.contains(q, ignoreCase = true)) {
+                add("$label$form")
+            }
+        }
+    }
+    Card(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    verb.infinitive,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    verb.meaning,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (matchedForms.isNotEmpty()) {
+                    Text(
+                        matchedForms.take(2).joinToString("  "),
+                        fontSize = 12.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.zttothers.frenchgrammar.presentation.viewmodel.LearningViewModel
+import com.zttothers.frenchgrammar.presentation.viewmodel.NumbersQuizViewModel
 import com.zttothers.frenchgrammar.presentation.viewmodel.SpellingQuizViewModel
 import com.zttothers.frenchgrammar.presentation.viewmodel.VerbViewModel
 import com.zttothers.frenchgrammar.ui.navigation.AppNavigation
@@ -71,11 +72,14 @@ fun AppContent() {
         }
     )
 
+    val numbersQuizViewModel = viewModel<NumbersQuizViewModel>()
+
     AppNavigation(
         navController = navController,
         verbViewModel = verbViewModel,
         learningViewModel = learningViewModel,
-        quizViewModel = quizViewModel
+        quizViewModel = quizViewModel,
+        numbersQuizViewModel = numbersQuizViewModel
     )
 }
 

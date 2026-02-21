@@ -86,6 +86,10 @@ object VerbDataGenerator {
             je = "extrais", tu = "extrais", ilElle = "extrait", nous = "extrayons", vous = "extrayez", ilsElles = "extraient",
             pastParticiple = "extrait", relatedVerbs = "traire, distraire, soustraire"),
 
+        Verb(infinitive = "être", meaning = "是，存在",
+            je = "suis", tu = "es", ilElle = "est", nous = "sommes", vous = "êtes", ilsElles = "sont",
+            pastParticiple = "été"),
+
         // 第三列
         Verb(infinitive = "faire", meaning = "做",
             je = "fais", tu = "fais", ilElle = "fait", nous = "faisons", vous = "faites", ilsElles = "font",
@@ -299,6 +303,6 @@ object VerbDataGenerator {
         Verb(infinitive = "vêtir", meaning = "給...穿衣",
             je = "vêts", tu = "vêts", ilElle = "vêt", nous = "vêtons", vous = "vêtez", ilsElles = "vêtent",
             pastParticiple = "vêtu")
-    )
+    ).mapIndexed { index, verb -> verb.copy(id = index + 1) }
 }
 

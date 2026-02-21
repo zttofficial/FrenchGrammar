@@ -22,8 +22,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,7 +55,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +65,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -71,6 +85,9 @@ import com.zttothers.frenchgrammar.ui.theme.ColorIncorrect
 import com.zttothers.frenchgrammar.ui.theme.ColorPronounBg
 import com.zttothers.frenchgrammar.ui.theme.md_theme_light_primary
 import com.zttothers.frenchgrammar.ui.theme.md_theme_light_tertiary
+import com.zttothers.frenchgrammar.ui.utils.SoundFeedback
+import com.zttothers.frenchgrammar.ui.utils.rememberTts
+import com.zttothers.frenchgrammar.ui.utils.speakFrench
 
 // ─── Spelling Quiz Screen ─────────────────────────────────────────────────────
 
@@ -83,10 +100,20 @@ fun QuizScreen(
     val state = viewModel.state.collectAsState().value
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    val tts by rememberTts(context)
 
     LaunchedEffect(state.currentIndex, state.submitted) {
         if (!state.submitted && !state.isFinished && !state.isLoading) {
             focusRequester.requestFocus()
+        }
+    }
+
+    // 答題音效
+    LaunchedEffect(state.submitted) {
+        if (state.submitted) {
+            if (state.isCorrect) SoundFeedback.playCorrect()
+            else SoundFeedback.playIncorrect()
         }
     }
 
@@ -200,6 +227,16 @@ fun QuizScreen(
                                     fontStyle = FontStyle.Italic,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
+                                Spacer(Modifier.height(4.dp))
+                                IconButton(onClick = { tts?.speakFrench(question.verb.infinitive) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "朗讀",
+                                        tint = if (tts != null) ColorFrenchBlue.copy(alpha = 0.55f)
+                                               else Color.LightGray,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -207,7 +244,11 @@ fun QuizScreen(
                     Spacer(Modifier.height(20.dp))
 
                     // Pronoun prompt
-                    Text("請填入以下人稱的變位：", fontSize = 13.sp, color = Color.Gray)
+                    Text(
+                        if (question.pronounLabel == "P.P.") "請填入過去分詞 (P.P.)："
+                        else "請填入以下人稱的變位：",
+                        fontSize = 13.sp, color = Color.Gray
+                    )
                     Spacer(Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -457,6 +498,9 @@ fun CardLearningScreen(
     viewModel: LearningViewModel
 ) {
     val learningState = viewModel.learningState.collectAsState().value
+    val context = LocalContext.current
+    val tts by rememberTts(context)
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     if (learningState.verbs.isEmpty()) {
         Scaffold(
@@ -480,6 +524,14 @@ fun CardLearningScreen(
     }
 
     val currentVerb = learningState.verbs.getOrNull(learningState.currentVerbIndex)
+    val listState = rememberLazyListState()
+
+    // Scroll to the selected verb when switching to list tab
+    LaunchedEffect(selectedTab, learningState.currentVerbIndex) {
+        if (selectedTab == 1) {
+            listState.animateScrollToItem(learningState.currentVerbIndex)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -496,75 +548,126 @@ fun CardLearningScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            val progress = (learningState.currentVerbIndex + 1).toFloat() / learningState.totalCount.toFloat()
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .padding(horizontal = 16.dp),
-                color = md_theme_light_primary,
-                trackColor = md_theme_light_primary.copy(alpha = 0.15f)
-            )
-            Text(
-                "${learningState.currentVerbIndex + 1} / ${learningState.totalCount}",
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                textAlign = TextAlign.Center,
-                fontSize = 13.sp,
-                color = Color.Gray
-            )
-
-            if (currentVerb != null) {
-                VerbCard(
-                    verb = currentVerb,
-                    isFlipped = learningState.isFlipped,
-                    onFlip = { viewModel.flipCard() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("卡片") },
+                    icon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null,
+                        modifier = Modifier.size(18.dp)) }
                 )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("列表") },
+                    icon = { Icon(Icons.Default.List, contentDescription = null,
+                        modifier = Modifier.size(18.dp)) }
+                )
+            }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            when (selectedTab) {
+                // ──────────────────── Card tab ────────────────────
+                0 -> Column(
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    FilledTonalButton(
-                        onClick = { viewModel.previousCard() },
-                        enabled = learningState.currentVerbIndex > 0,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    Text(
+                        "${learningState.currentVerbIndex + 1} / ${learningState.totalCount}",
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+                        textAlign = TextAlign.Center,
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+
+                    if (currentVerb != null) {
+                        VerbCard(
+                            verb = currentVerb,
+                            isFlipped = learningState.isFlipped,
+                            onFlip = { viewModel.flipCard() },
+                            onSpeak = { tts?.speakFrench(it) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = { viewModel.previousCard() },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null,
+                                    modifier = Modifier.padding(end = 4.dp))
+                                Text("上一個")
+                            }
+                            Button(
+                                onClick = { viewModel.nextCard() },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("下一個")
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, null,
+                                    modifier = Modifier.padding(start = 4.dp))
+                            }
+                        }
                     }
-                    Button(
-                        onClick = { viewModel.markAsIncorrect() },
-                        colors = ButtonDefaults.buttonColors(containerColor = ColorIncorrect),
-                        modifier = Modifier.weight(2f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Close, null, modifier = Modifier.padding(end = 4.dp))
-                        Text("不會")
-                    }
-                    Button(
-                        onClick = { viewModel.markAsCorrect() },
-                        colors = ButtonDefaults.buttonColors(containerColor = ColorCorrect),
-                        modifier = Modifier.weight(2f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Check, null, modifier = Modifier.padding(end = 4.dp))
-                        Text("會了")
-                    }
-                    FilledTonalButton(
-                        onClick = { viewModel.nextCard() },
-                        enabled = learningState.currentVerbIndex < learningState.totalCount - 1,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+                }
+
+                // ──────────────────── List tab ────────────────────
+                1 -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    itemsIndexed(learningState.verbs) { index, verb ->
+                        val isCurrent = index == learningState.currentVerbIndex
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isCurrent) md_theme_light_primary.copy(alpha = 0.10f)
+                                    else Color.Transparent
+                                )
+                                .clickable {
+                                    viewModel.jumpToVerbId(verb.id)
+                                    selectedTab = 0
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "${index + 1}.",
+                                fontSize = 13.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.width(36.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    verb.infinitive,
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 16.sp,
+                                    color = if (isCurrent) md_theme_light_primary else Color.Unspecified
+                                )
+                                Text(
+                                    verb.meaning,
+                                    fontSize = 13.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            if (isCurrent) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = md_theme_light_primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.4f))
                     }
                 }
             }
